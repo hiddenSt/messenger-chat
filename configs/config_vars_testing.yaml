@@ -7,4 +7,4 @@ is_testing: true
 server-port: 8080
 
 # pg_service_template_db-1 is the service name + _ + filename of the db-1.sql
-dbconnection: 'postgresql://testsuite@localhost:15433/pg_service_template_db-1'
+dbconnection: 'postgresql://testsuite@localhost:15433/messenger-chat'
