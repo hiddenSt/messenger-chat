@@ -1,6 +1,18 @@
 version: "2.3"
 
 services:
+    rabbitmq:
+         container_name: service-rabbitmq
+         image: rabbitmq:3.11.1-management-alpine
+         environment:
+           - RABBITMQ_NODE_PORT=5672
+           - RABBITMQ_DEFAULT_USER=user
+           - RABBITMQ_DEFAULT_PASS=password
+         ports:
+           - 15672:15672
+           - 5672:5672
+
+
     postgres:
         container_name: service-postgres-chat
         image: postgres:12
@@ -43,6 +55,7 @@ services:
         working_dir: /messenger-chat
         entrypoint:
           - /tools/run_as_user.sh
+        command: make -- --debug-start-in-docker-debug
         depends_on:
           - postgres
         networks:
