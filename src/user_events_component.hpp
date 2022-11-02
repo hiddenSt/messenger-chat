@@ -24,21 +24,6 @@ class UserEventsComponent final : public components::RabbitMQ {
   UserEventsComponent(const components::ComponentConfig& config, const components::ComponentContext& context);
 };
 
-class UserCreatedConsumer final : public rabbitmq::ConsumerComponentBase {
- public:
-  static constexpr std::string_view kName = "user-created-consumer";
-
-  UserCreatedConsumer(const components::ComponentConfig& config, const components::ComponentContext& context);
-
-  std::vector<std::int32_t> GetConsumedMessages();
-
- protected:
-  void Process(std::string message) override;
-
- private:
-  userver::storages::postgres::ClusterPtr pg_cluster_;
-};
-
 class UserRemovedConsumer final : public rabbitmq::ConsumerComponentBase {
  public:
   static constexpr std::string_view kName = "user-removed-consumer";

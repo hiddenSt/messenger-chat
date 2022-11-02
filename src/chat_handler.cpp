@@ -78,7 +78,7 @@ class GetMessagesHandler final : public userver::server::handlers::HttpHandlerJs
     std::int32_t id = std::stol(request.GetPathArg("id"));
     auto query_result = pg_cluster_->Execute(
         postgres::ClusterHostType::kMaster,
-        "SELECT id, sender_id, receiver_id, message, timepoint FROM messenger_schema.chat WHERE id = $1)", id);
+        "SELECT id, sender_id, receiver_id, message, EXTRACT(EPOCH FROM TIMESTAMP timepoint) FROM messenger_schema.chat WHERE id = $1)", id);
 
     if (query_result.RowsAffected() == 0) {
       throw server::handlers::ResourceNotFound();
