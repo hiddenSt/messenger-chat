@@ -9,8 +9,8 @@
 #include <userver/components/component_context.hpp>
 #include <userver/concurrent/variable.hpp>
 #include <userver/rabbitmq.hpp>
-#include <userver/urabbitmq/consumer_base.hpp>
 #include <userver/storages/postgres/cluster.hpp>
+#include <userver/urabbitmq/consumer_base.hpp>
 
 namespace messenger::chat {
 
@@ -21,8 +21,8 @@ class UserEventsComponent final : public components::RabbitMQ {
  public:
   static constexpr std::string_view kName = "user-events";
 
-  UserEventsComponent(const components::ComponentConfig& config, const components::ComponentContext& context);                                                                                                                                                                                                                                                                   
-};        
+  UserEventsComponent(const components::ComponentConfig& config, const components::ComponentContext& context);
+};
 
 class UserCreatedConsumer final : public rabbitmq::ConsumerComponentBase {
  public:

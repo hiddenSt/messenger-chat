@@ -17,10 +17,15 @@
 #include "dto.hpp"
 #include "userver/formats/json/value_builder.hpp"
 #include "userver/server/http/http_status.hpp"
+#include "userver/storages/postgres/io/row_types.hpp"
 
 namespace messenger::chat {
 
 namespace {
+
+namespace server = userver::server;
+namespace json = userver::formats::json;
+namespace postgres = userver::storages::postgres;
 
 class AddMessageHandler final : public userver::server::handlers::HttpHandlerJsonBase {
  public:
@@ -31,45 +36,32 @@ class AddMessageHandler final : public userver::server::handlers::HttpHandlerJso
       : HttpHandlerJsonBase(config, component_context),
         pg_cluster_(component_context.FindComponent<userver::components::Postgres>("messenger-chat").GetCluster()) {}
 
-  userver::formats::json::Value HandleRequestJsonThrow(const userver::server::http::HttpRequest& request,
-                                                       const userver::formats::json::Value& json,
-                                                       userver::server::request::RequestContext&) const override {
+  userver::formats::json::Value HandleRequestJsonThrow(const server::http::HttpRequest& request,
+                                                       const json::Value& json,
+                                                       server::request::RequestContext&) const override {
     auto message = json.As<Message>();
     auto now_time_point = std::chrono::system_clock::now();
-    auto query_result = pg_cluster_->Execute(
-        userver::storages::postgres::ClusterHostType::kMaster,
-        "INSERT INTO messenger_schema.chat(sender_id, receiver_id, timepoint, message) VALUES ($1, $2, $3, $4)");
+    auto query_result = pg_cluster_->Execute(userver::storages::postgres::ClusterHostType::kMaster,
+                                             "INSERT INTO messenger_schema.chat(sender_id, receiver_id, timepoint, "
+                                             "message) VALUES ($1, $2, TO_TIMESTAMP($3), $4) ON DUPLICATE DO NOTHING",
+                                             message.sender_id, message.receiver_id,
+                                             std::chrono::system_clock::to_time_t(now_time_point), message.message);
 
     if (query_result.RowsAffected() == 0) {
-      throw userver::server::handlers::ClientError();
+      throw server::handlers::ClientError();
     }
 
-    request.SetResponseStatus(userver::server::http::HttpStatus::kCreated);
-    userver::formats::json::ValueBuilder builder;
-    builder["time_point"] = now_time_point;
-    builder["sender_id"] = message.sender_id;
-    builder["receiver_id"] = message.receiver_id;
+    auto result_set = query_result.AsSetOf<MessageInfo>(postgres::kRowTag);
+    MessageInfo message_info = result_set[0];
 
-    return builder.ExtractValue();
+    request.SetResponseStatus(server::http::HttpStatus::kCreated);
+    json::ValueBuilder response;
+    response["message"] = message_info;
+
+    return response.ExtractValue();
   }
 
-  userver::storages::postgres::ClusterPtr pg_cluster_;
-};
-
-class RemoveMessageHandler final : public userver::server::handlers::HttpHandlerJsonBase {
- public:
-  static constexpr std::string_view kName = "handler-delete-message";
-
-  RemoveMessageHandler(const userver::components::ComponentConfig& config,
-                       const userver::components::ComponentContext& component_context)
-      : HttpHandlerJsonBase(config, component_context),
-        pg_cluster_(component_context.FindComponent<userver::components::Postgres>("messenger-chat").GetCluster()) {}
-
-  userver::formats::json::Value HandleRequestJsonThrow(const userver::server::http::HttpRequest& request,
-                                                       const userver::formats::json::Value& json,
-                                                       userver::server::request::RequestContext&) const override {}
-
-  userver::storages::postgres::ClusterPtr pg_cluster_;
+  postgres::ClusterPtr pg_cluster_;
 };
 
 class GetMessagesHandler final : public userver::server::handlers::HttpHandlerJsonBase {
@@ -81,9 +73,24 @@ class GetMessagesHandler final : public userver::server::handlers::HttpHandlerJs
       : HttpHandlerJsonBase(config, component_context),
         pg_cluster_(component_context.FindComponent<userver::components::Postgres>("messenger-chat").GetCluster()) {}
 
-  userver::formats::json::Value HandleRequestJsonThrow(const userver::server::http::HttpRequest& request,
-                                                       const userver::formats::json::Value& request_json,
-                                                       userver::server::request::RequestContext&) const override {}
+  userver::formats::json::Value HandleRequestJsonThrow(const server::http::HttpRequest& request, const json::Value&,
+                                                       server::request::RequestContext&) const override {
+    std::int32_t id = std::stol(request.GetPathArg("id"));
+    auto query_result = pg_cluster_->Execute(
+        postgres::ClusterHostType::kMaster,
+        "SELECT id, sender_id, receiver_id, message, timepoint FROM messenger_schema.chat WHERE id = $1)", id);
+
+    if (query_result.RowsAffected() == 0) {
+      throw server::handlers::ResourceNotFound();
+    }
+
+    auto result_set = query_result.AsSetOf<MessageInfo>(postgres::kRowTag);
+    MessageInfo message_info = result_set[0];
+    json::ValueBuilder response;
+    response["message"] = message_info;
+
+    return response.ExtractValue();
+  }
 
   userver::storages::postgres::ClusterPtr pg_cluster_;
 };
@@ -94,7 +101,6 @@ void AppendChat(userver::components::ComponentList& component_list) {
   component_list.Append<AddMessageHandler>()
       .Append<UserEventsComponent>()
       .Append<GetMessagesHandler>()
-      .Append<RemoveMessageHandler>()
       .Append<UserRemovedConsumer>()
       .Append<userver::components::Postgres>("messenger-chat")
       .Append<components::Secdist>()

@@ -50,6 +50,7 @@ components_manager:
             path: /tests/{action}
             method: POST
             task_processor: main-task-processor
+
         handler-ping:
             path: /ping
             method: GET
@@ -58,17 +59,12 @@ components_manager:
             url_trailing_slash: strict-match
 
         handler-add-message:
-            path: /v1/message
+            path: /api/v1/message
             method: POST
             task_processor: main-task-processor
 
-        handler-delete-message:
-            path: /v1/message/{id}
-            method: DELETE
-            task_processor: main-task-processor
-
         handler-get-messages:
-            path: /v1/message/{id}
+            path: /api/v1/message/{id}
             method: GET
             task_processor: main-task-processor
 
