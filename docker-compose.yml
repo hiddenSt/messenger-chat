@@ -1,18 +1,6 @@
-version: "2.3"
+version: "3"
 
 services:
-    rabbitmq:
-         container_name: service-rabbitmq
-         image: rabbitmq:3.11.1-management-alpine
-         environment:
-           - RABBITMQ_NODE_PORT=5672
-           - RABBITMQ_DEFAULT_USER=user
-           - RABBITMQ_DEFAULT_PASS=password
-         ports:
-           - 15672:15672
-           - 5672:5672
-
-
     postgres:
         container_name: service-postgres-chat
         image: postgres:12
@@ -24,11 +12,12 @@ services:
           - 9090:5432
         volumes:
           - ./postgresql/schemas:/docker-entrypoint-initdb.d
-          - ./.pgdata:/var/lib/postgresql/data
+          - ./.pgdata:/var/lib/postgresql/
         networks:
           - postgres
 
     messenger-chat-service:
+        container_name: chat_service
         image: ghcr.io/userver-framework/docker-userver-build-base:v1a
         privileged: true
         environment:
@@ -51,16 +40,21 @@ services:
           - ./third_party/userver/tools/docker:/tools:ro
           - ${TC_CORES_DIR:-./.cores}:/cores:rw
         ports:
-          - 8090:8090
+          - "8090:8090"
         working_dir: /messenger-chat
         entrypoint:
           - /tools/run_as_user.sh
-        command: make -- --debug-start-in-docker-debug
         depends_on:
           - postgres
         networks:
           - postgres
+          - nginx
+          - rabbitmq
 
 networks:
-    postgres:
-        driver: bridge
+  postgres:
+    driver: bridge
+  nginx:
+    external: true
+  rabbitmq:
+    external: true
