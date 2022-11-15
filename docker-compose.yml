@@ -16,7 +16,7 @@ services:
         networks:
           - postgres
 
-    messenger-chat-service:
+    chat_service:
         container_name: chat_service
         image: ghcr.io/userver-framework/docker-userver-build-base:v1a
         privileged: true
@@ -41,6 +41,8 @@ services:
           - ${TC_CORES_DIR:-./.cores}:/cores:rw
         ports:
           - "8090:8090"
+        expose:
+          - "8090"
         working_dir: /messenger-chat
         entrypoint:
           - /tools/run_as_user.sh

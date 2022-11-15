@@ -82,15 +82,15 @@ install: build-release
 
 # Start targets makefile in docker enviroment
 docker-impl-%:
-	docker-compose run --rm messenger-chat-service make $*
+	docker-compose run --rm chat-service make $*
 
 # Build and runs service in docker environment
 docker-start-service-debug:
-	@docker-compose run --name chat_service -p 8090:8090 --rm messenger-chat-service make -- --debug-start-in-docker-debug
+	@docker-compose run --name chat_service -p 8090:8090 --rm chat_service make -- --debug-start-in-docker-debug
 
 # Build and runs service in docker environment
 docker-start-service:
-	@docker-compose run -p 8090:8090 --rm messenger-chat-service make -- --debug-start-in-docker
+	@docker-compose run -p 8090:8090 --rm chat-service make -- --debug-start-in-docker
 
 # Stop docker container and remove PG data
 docker-clean-data:
