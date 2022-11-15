@@ -41,19 +41,29 @@ class AddMessageHandler final : public userver::server::handlers::HttpHandlerJso
                                                        server::request::RequestContext&) const override {
     auto message = json.As<Message>();
     auto now_time_point = std::chrono::system_clock::now();
-    auto query_result = pg_cluster_->Execute(userver::storages::postgres::ClusterHostType::kMaster,
+    auto insert_query = pg_cluster_->Execute(userver::storages::postgres::ClusterHostType::kMaster,
                                              "INSERT INTO messenger_schema.chat(sender_id, receiver_id, timepoint, "
-                                             "message) VALUES ($1, $2, TO_TIMESTAMP($3), $4) ON DUPLICATE DO NOTHING",
+                                             "message) VALUES ($1, $2, TO_TIMESTAMP($3), $4) ON CONFLICT DO NOTHING",
                                              message.sender_id, message.receiver_id,
                                              std::chrono::system_clock::to_time_t(now_time_point), message.message);
 
-    if (query_result.RowsAffected() == 0) {
-      throw server::handlers::ClientError();
+    if (insert_query.RowsAffected() == 0) {
+      throw server::handlers::ClientError{};
     }
 
-    auto result_set = query_result.AsSetOf<MessageInfo>(postgres::kRowTag);
-    MessageInfo message_info = result_set[0];
+    auto select_query = pg_cluster_->Execute(
+        userver::storages::postgres::ClusterHostType::kMaster,
+        "SELECT id, sender_id, receiver_id, message, EXTRACT(EPOCH FROM "
+        "timepoint) FROM messenger_schema.chat WHERE sender_id = $1 AND receiver_id "
+        "= $2 AND message = $3 AND timepoint = TO_TIMESTAMP($4)",
+        message.sender_id, message.receiver_id, message.message, std::chrono::system_clock::to_time_t(now_time_point));
+    auto result_set = select_query.AsSetOf<MessageInfo>(postgres::kRowTag);
 
+    if (result_set.IsEmpty()) {
+      throw server::handlers::InternalServerError{};
+    }
+
+    MessageInfo message_info = result_set[0];
     request.SetResponseStatus(server::http::HttpStatus::kCreated);
     json::ValueBuilder response;
     response["message"] = message_info;
@@ -76,9 +86,10 @@ class GetMessagesHandler final : public userver::server::handlers::HttpHandlerJs
   userver::formats::json::Value HandleRequestJsonThrow(const server::http::HttpRequest& request, const json::Value&,
                                                        server::request::RequestContext&) const override {
     std::int32_t id = std::stol(request.GetPathArg("id"));
-    auto query_result = pg_cluster_->Execute(
-        postgres::ClusterHostType::kMaster,
-        "SELECT id, sender_id, receiver_id, message, EXTRACT(EPOCH FROM TIMESTAMP timepoint) FROM messenger_schema.chat WHERE id = $1)", id);
+    auto query_result = pg_cluster_->Execute(postgres::ClusterHostType::kMaster,
+                                             "SELECT id, sender_id, receiver_id, message, EXTRACT(EPOCH FROM "
+                                             "timepoint) FROM messenger_schema.chat WHERE id = $1)",
+                                             id);
 
     if (query_result.RowsAffected() == 0) {
       throw server::handlers::ResourceNotFound();
