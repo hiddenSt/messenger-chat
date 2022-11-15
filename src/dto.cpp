@@ -1,6 +1,8 @@
+#include <bits/types/time_t.h>
 #include <dto.hpp>
 
 #include <ctime>
+#include <stdexcept>
 
 #include <userver/formats/json/value_builder.hpp>
 
@@ -18,7 +20,17 @@ userver::formats::json::Value Serialize(const MessageInfo& data,
   builder["sender_id"] = data.sender_id;
   builder["receiver_id"] = data.sender_id;
   builder["message"] = data.message;
-  // builder["timepoint"] = data.time_point;
+  std::tm* calendar_time = std::localtime(&data.timepoint);
+
+  if (calendar_time == nullptr) {
+    throw std::runtime_error{"AAAA"};
+  }
+
+  char buffer[100];
+  std::strftime(buffer, 100, "%Y-%m-%dT%H:%M:%S", calendar_time);
+  std::string time_str{buffer, 100};
+
+  builder["timepoint"] = time_str;
   return builder.ExtractValue();
 }
 
