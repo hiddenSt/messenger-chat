@@ -86,11 +86,11 @@ docker-impl-%:
 
 # Build and runs service in docker environment
 docker-start-service-debug:
-	@docker-compose run -p 8080:8080 --rm messenger-chat-service make -- --debug-start-in-docker-debug
+	@docker-compose run -p 8090:8090 --rm messenger-chat-service make -- --debug-start-in-docker-debug
 
 # Build and runs service in docker environment
 docker-start-service:
-	@docker-compose run -p 8080:8080 --rm messenger-chat-service make -- --debug-start-in-docker
+	@docker-compose run -p 8090:8090 --rm messenger-chat-service make -- --debug-start-in-docker
 
 # Stop docker container and remove PG data
 docker-clean-data:
