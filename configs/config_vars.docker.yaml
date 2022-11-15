@@ -1,9 +1,9 @@
 worker-threads: 4
 worker-fs-threads: 2
-logger-level: debug
+logger-level: error
 
 is_testing: false
 
-server-port: 8080
+server-port: 8090
 
 dbconnection: 'postgresql://user:password@service-postgres-chat:5432/messenger-chat'
