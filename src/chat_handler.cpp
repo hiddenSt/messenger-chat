@@ -2,6 +2,8 @@
 #include "user_events_component.hpp"
 
 #include <chrono>
+#include <string>
+#include <optional>
 
 #include <fmt/format.h>
 
@@ -27,6 +29,34 @@ namespace server = userver::server;
 namespace json = userver::formats::json;
 namespace postgres = userver::storages::postgres;
 
+std::optional<std::string> ValidatePostJson(const json::Value& body) {
+  if (!body.HasMember("sender_id")) {
+    return "Body must contain integer field 'sender_id'.";
+  }
+
+  if (!body.HasMember("receiver_id")) {
+    return "Body must contain integer field 'receiver_id'.";
+  }
+
+  if (!body.HasMember("message")) {
+    return "Body must contain string field 'message'.";
+  }
+
+  if (!body["sender_id"].IsUInt64()) {
+    return "Field 'sender_id' must be unsigned integer.";
+  }
+
+  if (!body["receiver_id"].IsUInt64()) {
+    return "Field 'sender_id' must be unsigned integer.";
+  }
+
+  if (!body["message"].IsString()) {
+    return "Field 'message' must be string.";
+  }
+
+  return std::nullopt;
+}
+
 class AddMessageHandler final : public userver::server::handlers::HttpHandlerJsonBase {
  public:
   static constexpr std::string_view kName = "handler-add-message";
@@ -39,16 +69,34 @@ class AddMessageHandler final : public userver::server::handlers::HttpHandlerJso
   userver::formats::json::Value HandleRequestJsonThrow(const server::http::HttpRequest& request,
                                                        const json::Value& json,
                                                        server::request::RequestContext&) const override {
+    auto error_or_nullopt = ValidatePostJson(json);
+    json::ValueBuilder response_body;
+
+    if (error_or_nullopt.has_value()) {
+      request.SetResponseStatus(server::http::HttpStatus::kBadRequest);
+      response_body["error"] = error_or_nullopt.value();
+      
+      return response_body.ExtractValue();
+    }
+
     auto message = json.As<Message>();
+
+    if (message.receiver_id == message.sender_id) {
+      request.SetResponseStatus(server::http::HttpStatus::kBadRequest);
+      response_body["error"] = "sender identifier can not be equal to receiver identifier";
+
+      return response_body.ExtractValue();
+    }
+
     auto now_time_point = std::chrono::system_clock::now();
     auto insert_query = pg_cluster_->Execute(userver::storages::postgres::ClusterHostType::kMaster,
                                              "INSERT INTO messenger_schema.chat(sender_id, receiver_id, timepoint, "
                                              "message) VALUES ($1, $2, TO_TIMESTAMP($3), $4) ON CONFLICT DO NOTHING",
                                              message.sender_id, message.receiver_id,
-                                             std::chrono::system_clock::to_time_t(now_time_point), message.message);
+                                             std::chrono::system_clock::to_time_t(now_time_point), message.text);
 
     if (insert_query.RowsAffected() == 0) {
-      throw server::handlers::ClientError{};
+      throw server::handlers::InternalServerError{};
     }
 
     auto select_query = pg_cluster_->Execute(
@@ -56,19 +104,18 @@ class AddMessageHandler final : public userver::server::handlers::HttpHandlerJso
         "SELECT id, sender_id, receiver_id, message, EXTRACT(EPOCH FROM "
         "timepoint) FROM messenger_schema.chat WHERE sender_id = $1 AND receiver_id "
         "= $2 AND message = $3 AND timepoint = TO_TIMESTAMP($4)",
-        message.sender_id, message.receiver_id, message.message, std::chrono::system_clock::to_time_t(now_time_point));
-    auto result_set = select_query.AsSetOf<MessageInfo>(postgres::kRowTag);
+        message.sender_id, message.receiver_id, message.text, std::chrono::system_clock::to_time_t(now_time_point));
+    auto result_set = select_query.AsSetOf<Message>(postgres::kRowTag);
 
     if (result_set.IsEmpty()) {
       throw server::handlers::InternalServerError{};
     }
 
-    MessageInfo message_info = result_set[0];
+    Message message_info = result_set[0];
     request.SetResponseStatus(server::http::HttpStatus::kCreated);
-    json::ValueBuilder response;
-    response["message"] = message_info;
+    response_body["message"] = message_info;
 
-    return response.ExtractValue();
+    return response_body.ExtractValue();
   }
 
   postgres::ClusterPtr pg_cluster_;
@@ -95,8 +142,8 @@ class GetMessagesHandler final : public userver::server::handlers::HttpHandlerJs
       throw server::handlers::ResourceNotFound();
     }
 
-    auto result_set = query_result.AsSetOf<MessageInfo>(postgres::kRowTag);
-    MessageInfo message_info = result_set[0];
+    auto result_set = query_result.AsSetOf<Message>(postgres::kRowTag);
+    Message message_info = result_set[0];
     json::ValueBuilder response;
     response["message"] = message_info;
 
