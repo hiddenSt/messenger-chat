@@ -11,6 +11,7 @@
 #include <userver/rabbitmq.hpp>
 #include <userver/storages/postgres/cluster.hpp>
 #include <userver/urabbitmq/consumer_base.hpp>
+#include "userver/storages/postgres/postgres_fwd.hpp"
 
 namespace messenger::chat {
 
@@ -29,8 +30,6 @@ class UserRemovedConsumer final : public rabbitmq::ConsumerComponentBase {
   static constexpr std::string_view kName = "user-removed-consumer";
 
   UserRemovedConsumer(const components::ComponentConfig& config, const components::ComponentContext& context);
-
-  std::vector<std::int32_t> GetConsumedMessages();
 
  protected:
   void Process(std::string message) override;
